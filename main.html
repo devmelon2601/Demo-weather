@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Thời Tiết</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        font-family: "Lexend", sans-serif;
+        background-color: #f0fdf4;
+      }
+      .chart-container {
+        position: relative;
+        height: 250px;
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body class="p-4 md:p-8">
+    <div class="max-w-4xl mx-auto space-y-6">
+      <div
+        class="bg-white rounded-[2rem] shadow-sm border border-emerald-100 overflow-hidden"
+      >
+        <div
+          class="bg-emerald-600 px-8 py-6 text-white flex justify-between items-center"
+        >
+          <div>
+            <h2 class="text-2xl font-bold">Mỹ Ngãi, Cao Lãnh</h2>
+            <p class="text-emerald-100 opacity-80 text-sm">
+              Thời tiết hỗ trợ sản xuất nông nghiệp
+            </p>
+          </div>
+          <div class="text-right">
+            <span
+              id="tagToday"
+              class="bg-yellow-400 text-emerald-900 text-[10px] font-bold px-3 py-1 rounded-full uppercase"
+              >Hôm nay</span
+            >
+            <p id="liveClock" class="text-xs mt-1 font-mono opacity-80">
+              --:--:--
+            </p>
+          </div>
+        </div>
+
+        <div class="p-8 grid md:grid-cols-2 gap-8 items-center">
+          <div class="flex items-center gap-6">
+            <div id="weatherIconLarge" class="text-6xl text-emerald-600">
+              🌡️
+            </div>
+            <div>
+              <h1
+                id="currTemp"
+                class="text-6xl font-black text-emerald-950 tracking-tighter"
+              >
+                --°C
+              </h1>
+              <p
+                id="currStatus"
+                class="text-emerald-600 font-semibold text-lg italic"
+              >
+                Đang cập nhật...
+              </p>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="bg-emerald-50 p-4 rounded-2xl">
+              <p class="text-[10px] text-emerald-800/50 uppercase font-bold">
+                Độ ẩm đất/khí
+              </p>
+              <p id="currHumi" class="text-xl font-bold text-emerald-700">
+                --%
+              </p>
+            </div>
+            <div class="bg-emerald-50 p-4 rounded-2xl">
+              <p class="text-[10px] text-emerald-800/50 uppercase font-bold">
+                Lượng mưa
+              </p>
+              <p id="currRain" class="text-xl font-bold text-emerald-700">
+                -- mm
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div
+        class="bg-white rounded-[2rem] p-8 shadow-sm border border-emerald-100"
+      >
+        <h3 class="text-emerald-900 font-bold mb-6 flex items-center gap-2">
+          📊 Biểu đồ nhiệt độ & lượng mưa 7 ngày
+        </h3>
+        <div class="chart-container">
+          <canvas id="weatherChart"></canvas>
+        </div>
+      </div>
+
+      <div
+        class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3"
+        id="forecastGrid"
+      ></div>
+    </div>
+
+    <script>
+      const LAT = 10.44190174211961;
+      const LON = 105.62741695943868;
+
+      // Đồng hồ thời gian thực
+      setInterval(() => {
+        document.getElementById("liveClock").innerText =
+          new Date().toLocaleTimeString("vi-VN");
+      }, 1000);
+
+      async function initAgriDashboard() {
+        try {
+          const url = `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,relative_humidity_2m,precipitation,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum&timezone=Asia%2FBangkok`;
+          const res = await fetch(url);
+          const data = await res.json();
+
+          // 1. Cập nhật chỉ số hiện tại
+          document.getElementById("currTemp").innerText =
+            Math.round(data.current.temperature_2m) + "°C";
+          document.getElementById("currHumi").innerText =
+            data.current.relative_humidity_2m + "%";
+          document.getElementById("currRain").innerText =
+            data.current.precipitation + "mm";
+          document.getElementById("currStatus").innerText =
+            data.current.precipitation > 0
+              ? "Đang có mưa rào"
+              : "Trời tạnh ráo";
+
+          // 2. Vẽ biểu đồ
+          renderChart(data.daily);
+
+          // 3. Render Grid dự báo
+          renderForecastGrid(data.daily);
+        } catch (err) {
+          console.error("Lỗi data:", err);
+        }
+      }
+
+      function renderChart(daily) {
+        const ctx = document.getElementById("weatherChart").getContext("2d");
+        new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels: daily.time.map((d) =>
+              new Date(d).toLocaleDateString("vi-VN", { weekday: "short" }),
+            ),
+            datasets: [
+              {
+                label: "Nhiệt độ Cao (°C)",
+                data: daily.temperature_2m_max,
+                type: "line",
+                borderColor: "#10b981",
+                backgroundColor: "#10b981",
+                tension: 0.4,
+                yAxisID: "y",
+              },
+              {
+                label: "Lượng mưa (mm)",
+                data: daily.precipitation_sum,
+                backgroundColor: "#3b82f6",
+                borderRadius: 5,
+                yAxisID: "y1",
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: { type: "linear", position: "left", grid: { display: false } },
+              y1: {
+                type: "linear",
+                position: "right",
+                grid: { display: false },
+              },
+            },
+            plugins: {
+              legend: { position: "bottom" },
+            },
+          },
+        });
+      }
+
+      function renderForecastGrid(daily) {
+        const container = document.getElementById("forecastGrid");
+        container.innerHTML = "";
+
+        daily.time.forEach((date, i) => {
+          const isToday = i === 0;
+          const dayLabel = isToday
+            ? "Hôm nay"
+            : new Date(date).toLocaleDateString("vi-VN", { weekday: "short" });
+
+          const rainSum = daily.precipitation_sum[i];
+          const rainProb = daily.precipitation_probability_max[i];
+
+          // LOGIC XỬ LÝ TRẠNG THÁI
+          let statusIcon = "☀️"; // Mặc định là nắng
+          let statusText = "Nắng tạnh";
+          let statusColor = "text-orange-500";
+
+          if (rainSum > 0 || rainProb > 30) {
+            if (rainProb > 70) {
+              statusIcon = "🌧️";
+              statusText = "Có mưa";
+              statusColor = "text-blue-600";
+            } else {
+              statusIcon = "⛅";
+              statusText = "Mây tạnh";
+              statusColor = "text-emerald-600";
+            }
+          }
+
+          const html = `
+            <div class="relative bg-white p-4 rounded-2xl border ${isToday ? "border-emerald-500 ring-2 ring-emerald-100" : "border-emerald-50"} shadow-sm text-center transition-all hover:scale-105">
+                ${isToday ? '<span class="absolute -top-2 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-[8px] px-2 py-0.5 rounded-full uppercase font-bold shadow-sm">Hiện tại</span>' : ""}
+                
+                <p class="text-[10px] font-bold ${isToday ? "text-emerald-600" : "text-gray-400"} mb-2 capitalize">${dayLabel}</p>
+                
+                <div class="text-2xl mb-1">${statusIcon}</div>
+                
+                <p class="text-lg font-black text-emerald-950">${Math.round(daily.temperature_2m_max[i])}°</p>
+                
+                <div class="mt-2 pt-2 border-t border-gray-50">
+                    <span class="block text-[10px] font-bold ${statusColor}">${statusText}</span>
+                    
+                    <div class="flex items-center justify-center gap-1 mt-1 ${rainProb > 0 ? "opacity-100" : "opacity-0"}">
+                        <span class="text-[9px] text-blue-400 font-medium">💧 ${rainProb}% (${rainSum}mm)</span>
+                    </div>
+                </div>
+            </div>
+        `;
+          container.insertAdjacentHTML("beforeend", html);
+        });
+      }
+
+      initAgriDashboard();
+    </script>
+  </body>
+</html>
